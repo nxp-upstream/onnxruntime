@@ -88,10 +88,20 @@ void Assign_Y_h(const T* Y_buffer_data, Tensor* Y_h, const Tensor* sequence_lens
     int64_t last_time_step = isReverse ? 0 : seq_length - 1;
     if (nullptr != sequence_lens && !isReverse)
       last_time_step = sequence_lens->Data<int>()[batch] - 1;
+
+    int64_t Y_h_offset = direction * batch_size * hidden_size + batch * hidden_size;
+
+    // Defense-in-depth: zero-fill Y_h if sequence length is 0 or invalid to prevent OOB read.
+    if (last_time_step < 0 || last_time_step >= seq_length) {
+      math::Set<T, CPUMathUtil>(onnxruntime::narrow<size_t>(hidden_size), 0,
+                                Y_h->MutableData<T>() + Y_h_offset,
+                                &CPUMathUtil::Instance());
+      continue;
+    }
+
     int64_t y_offset = last_time_step * num_directions * batch_size * hidden_size +
                        direction * batch_size * hidden_size +
                        batch * hidden_size;
-    int64_t Y_h_offset = direction * batch_size * hidden_size + batch * hidden_size;
     math::CopyVector<T, CPUMathUtil>(static_cast<int>(hidden_size), Y_buffer_data + y_offset,
                                      Y_h->MutableData<T>() + Y_h_offset,
                                      &CPUMathUtil::Instance());
@@ -150,6 +160,19 @@ Status RNN<float>::Compute(OpKernelContext* ctx) const {
 
   std::vector<int64_t> Y_h_dims({num_directions, batch_size, hidden_size_});
   Tensor* Y_h = ctx->Output(1, Y_h_dims);
+
+  // Reset output and return if max sequence length is 0
+  if (sequence_lens != nullptr) {
+    int32_t max_sequence_length = *std::max_element(sequence_lens->Data<int32_t>(),
+                                                    sequence_lens->Data<int32_t>() + sequence_lens->Shape().Size());
+    if (max_sequence_length == 0) {
+      if (Y != nullptr)
+        std::fill_n(Y->MutableData<float>(), Y->Shape().Size(), 0.f);
+      if (Y_h != nullptr)
+        std::fill_n(Y_h->MutableData<float>(), Y_h->Shape().Size(), 0.f);
+      return Status::OK();
+    }
+  }
 
   AllocatorPtr alloc;
   ORT_RETURN_IF_ERROR(ctx->GetTempSpaceAllocator(&alloc));
