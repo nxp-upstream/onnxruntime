@@ -82,6 +82,13 @@ class TestBackendKwargsAllowlist(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             backend.prepare(name, profile_file_prefix="/tmp/should_not_exist_profile")
 
+    def test_blocked_session_option_enable_profiling_raises(self):
+        """enable_profiling is excluded from the allowlist because it causes uncontrolled
+        file writes (profiling JSON) to the current working directory."""
+        name = get_name("mul_1.onnx")
+        with self.assertRaises(RuntimeError):
+            backend.prepare(name, enable_profiling=True)
+
     def test_unknown_kwarg_is_silently_ignored(self):
         """A kwarg that is not a SessionOptions attribute at all must be silently ignored.
         This preserves backward compatibility for callers who pass extra kwargs."""
