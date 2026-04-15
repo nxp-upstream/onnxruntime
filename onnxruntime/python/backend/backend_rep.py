@@ -10,6 +10,16 @@ from onnx.backend.base import BackendRep
 
 from onnxruntime import RunOptions
 
+# Allowlist of RunOptions attributes that are safe to set via the backend API.
+# Other attributes (e.g. terminate, training_mode) are intentionally excluded.
+# SessionOptions keys forwarded from run_model() are silently ignored here.
+_ALLOWED_RUN_OPTIONS = frozenset({
+    "log_severity_level",
+    "log_verbosity_level",
+    "logid",
+    "only_execute_path_to_fetches",
+})
+
 
 class OnnxRuntimeBackendRep(BackendRep):
     """
@@ -31,8 +41,10 @@ class OnnxRuntimeBackendRep(BackendRep):
 
         options = RunOptions()
         for k, v in kwargs.items():
-            if hasattr(options, k):
+            if k in _ALLOWED_RUN_OPTIONS:
                 setattr(options, k, v)
+            # Unknown keys are silently ignored: run_model() forwards the same kwargs
+            # used for SessionOptions, so those keys will arrive here and must not raise.
 
         if isinstance(inputs, list):
             inps = {}

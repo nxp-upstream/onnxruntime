@@ -17,6 +17,25 @@ from onnx.checker import check_model
 from onnxruntime import InferenceSession, SessionOptions, get_available_providers, get_device
 from onnxruntime.backend.backend_rep import OnnxRuntimeBackendRep
 
+# Allowlist of SessionOptions attributes that are safe to set via the backend API.
+# Dangerous attributes (e.g. optimized_model_filepath, profile_file_prefix, enable_profiling)
+# are intentionally excluded to prevent arbitrary file writes through user-controlled kwargs.
+_ALLOWED_SESSION_OPTIONS = frozenset({
+    "enable_cpu_mem_arena",
+    "enable_mem_pattern",
+    "enable_mem_reuse",
+    "execution_mode",
+    "execution_order",
+    "graph_optimization_level",
+    "inter_op_num_threads",
+    "intra_op_num_threads",
+    "log_severity_level",
+    "log_verbosity_level",
+    "logid",
+    "use_deterministic_compute",
+    "use_per_session_threads",
+})
+
 
 class OnnxRuntimeBackend(Backend):
     """
@@ -111,8 +130,13 @@ class OnnxRuntimeBackend(Backend):
         elif isinstance(model, (str, bytes)):
             options = SessionOptions()
             for k, v in kwargs.items():
-                if hasattr(options, k):
+                if k in _ALLOWED_SESSION_OPTIONS:
                     setattr(options, k, v)
+                elif hasattr(SessionOptions(), k):
+                    raise RuntimeError(
+                        f"SessionOptions attribute '{k}' is not permitted via the backend API. "
+                        f"Allowed attributes: {sorted(_ALLOWED_SESSION_OPTIONS)}"
+                    )
 
             excluded_providers = os.getenv("ORT_ONNX_BACKEND_EXCLUDE_PROVIDERS", default="").split(",")
             providers = [x for x in get_available_providers() if (x not in excluded_providers)]
