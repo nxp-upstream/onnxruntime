@@ -120,7 +120,8 @@ class OnnxRuntimeBackend(Backend):
         :param device: requested device for the computation,
             None means the default one which depends on
             the compilation settings
-        :param kwargs: see :class:`onnxruntime.SessionOptions`
+        :param kwargs: only a safe subset of :class:`onnxruntime.SessionOptions` attributes are
+            accepted; see ``_ALLOWED_SESSION_OPTIONS`` for the list
         :return: :class:`onnxruntime.InferenceSession`
         """
         if isinstance(model, OnnxRuntimeBackendRep):
@@ -132,7 +133,7 @@ class OnnxRuntimeBackend(Backend):
             for k, v in kwargs.items():
                 if k in _ALLOWED_SESSION_OPTIONS:
                     setattr(options, k, v)
-                elif hasattr(SessionOptions(), k):
+                elif hasattr(options, k):
                     raise RuntimeError(
                         f"SessionOptions attribute '{k}' is not permitted via the backend API. "
                         f"Allowed attributes: {sorted(_ALLOWED_SESSION_OPTIONS)}"
@@ -178,7 +179,8 @@ class OnnxRuntimeBackend(Backend):
         :param device: requested device for the computation,
             None means the default one which depends on
             the compilation settings
-        :param kwargs: see :class:`onnxruntime.RunOptions`
+        :param kwargs: only a safe subset of :class:`onnxruntime.RunOptions` attributes are
+            accepted; see ``_ALLOWED_RUN_OPTIONS`` in ``backend_rep.py`` for the list
         :return: predictions
         """
         rep = cls.prepare(model, device, **kwargs)

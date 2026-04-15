@@ -11,7 +11,8 @@ from onnx.backend.base import BackendRep
 from onnxruntime import RunOptions
 
 # Allowlist of RunOptions attributes that are safe to set via the backend API.
-# Other attributes (e.g. terminate, training_mode) are intentionally excluded.
+# 'terminate' excluded: setting it True would deny the current inference call.
+# 'training_mode' excluded: silently switches inference behavior in training builds.
 # SessionOptions keys forwarded from run_model() are silently ignored here.
 _ALLOWED_RUN_OPTIONS = frozenset({
     "log_severity_level",

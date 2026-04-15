@@ -66,7 +66,7 @@ class TestBackend(unittest.TestCase):
 
 class TestBackendKwargsAllowlist(unittest.TestCase):
     """Tests that the SessionOptions/RunOptions kwargs allowlist correctly blocks dangerous
-    attributes and allows safe ones, preventing arbitrary file write via setattr()."""
+    attributes and allows safe ones, preventing arbitrary file writes through user-controlled kwargs."""
 
     def test_blocked_session_option_optimized_model_filepath_raises(self):
         """optimized_model_filepath is a known SessionOptions attr but is not in the allowlist.
