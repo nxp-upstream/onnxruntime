@@ -14,12 +14,14 @@ from onnxruntime import RunOptions
 # 'terminate' excluded: setting it True would deny the current inference call.
 # 'training_mode' excluded: silently switches inference behavior in training builds.
 # SessionOptions keys forwarded from run_model() are silently ignored here.
-_ALLOWED_RUN_OPTIONS = frozenset({
-    "log_severity_level",
-    "log_verbosity_level",
-    "logid",
-    "only_execute_path_to_fetches",
-})
+_ALLOWED_RUN_OPTIONS = frozenset(
+    {
+        "log_severity_level",
+        "log_verbosity_level",
+        "logid",
+        "only_execute_path_to_fetches",
+    }
+)
 
 
 class OnnxRuntimeBackendRep(BackendRep):
