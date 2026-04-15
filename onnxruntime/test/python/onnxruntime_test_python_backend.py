@@ -2,6 +2,8 @@
 # Licensed under the MIT License.
 
 # -*- coding: UTF-8 -*-
+import os
+import tempfile
 import unittest
 
 import numpy as np
@@ -73,17 +75,20 @@ class TestBackendKwargsAllowlist(unittest.TestCase):
         """optimized_model_filepath is a known SessionOptions attr but is not in the allowlist.
         It must raise RuntimeError to prevent arbitrary file overwrites."""
         name = get_name("mul_1.onnx")
-        with self.assertRaises(RuntimeError) as ctx:
-            backend.prepare(name, optimized_model_filepath="/tmp/should_not_exist.bin")
-        self.assertIn("not permitted", str(ctx.exception))
+        with tempfile.NamedTemporaryFile(suffix=".bin") as tmp:
+            with self.assertRaises(RuntimeError) as ctx:
+                backend.prepare(name, optimized_model_filepath=tmp.name)
+            self.assertIn("not permitted", str(ctx.exception))
 
     def test_blocked_session_option_profile_file_prefix_raises(self):
         """profile_file_prefix is a known SessionOptions attr but is not in the allowlist.
         It must raise RuntimeError to prevent arbitrary file writes via profiling output."""
         name = get_name("mul_1.onnx")
-        with self.assertRaises(RuntimeError) as ctx:
-            backend.prepare(name, profile_file_prefix="/tmp/should_not_exist_profile")
-        self.assertIn("not permitted", str(ctx.exception))
+        with tempfile.TemporaryDirectory() as tmpdir:
+            prefix = os.path.join(tmpdir, "profile")
+            with self.assertRaises(RuntimeError) as ctx:
+                backend.prepare(name, profile_file_prefix=prefix)
+            self.assertIn("not permitted", str(ctx.exception))
 
     def test_blocked_session_option_enable_profiling_raises(self):
         """enable_profiling is excluded from the allowlist because it causes uncontrolled
