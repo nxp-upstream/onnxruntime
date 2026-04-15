@@ -73,22 +73,25 @@ class TestBackendKwargsAllowlist(unittest.TestCase):
         """optimized_model_filepath is a known SessionOptions attr but is not in the allowlist.
         It must raise RuntimeError to prevent arbitrary file overwrites."""
         name = get_name("mul_1.onnx")
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(RuntimeError) as ctx:
             backend.prepare(name, optimized_model_filepath="/tmp/should_not_exist.bin")
+        self.assertIn("not permitted", str(ctx.exception))
 
     def test_blocked_session_option_profile_file_prefix_raises(self):
         """profile_file_prefix is a known SessionOptions attr but is not in the allowlist.
         It must raise RuntimeError to prevent arbitrary file writes via profiling output."""
         name = get_name("mul_1.onnx")
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(RuntimeError) as ctx:
             backend.prepare(name, profile_file_prefix="/tmp/should_not_exist_profile")
+        self.assertIn("not permitted", str(ctx.exception))
 
     def test_blocked_session_option_enable_profiling_raises(self):
         """enable_profiling is excluded from the allowlist because it causes uncontrolled
         file writes (profiling JSON) to the current working directory."""
         name = get_name("mul_1.onnx")
-        with self.assertRaises(RuntimeError):
+        with self.assertRaises(RuntimeError) as ctx:
             backend.prepare(name, enable_profiling=True)
+        self.assertIn("not permitted", str(ctx.exception))
 
     def test_unknown_kwarg_is_silently_ignored(self):
         """A kwarg that is not a SessionOptions attribute at all must be silently ignored.
@@ -121,16 +124,40 @@ class TestBackendKwargsAllowlist(unittest.TestCase):
         output_expected = np.array([[1.0, 4.0], [9.0, 16.0], [25.0, 36.0]], dtype=np.float32)
         np.testing.assert_allclose(res[0], output_expected, rtol=1e-05, atol=1e-08)
 
-    def test_blocked_run_option_terminate_is_silently_ignored(self):
+    def test_blocked_run_option_terminate_raises(self):
         """terminate is a known RunOptions attr but is not in _ALLOWED_RUN_OPTIONS.
-        run_model() forwards the same kwargs to both prepare() and rep.run(), so blocked
-        RunOptions attrs must be silently ignored — not raise — to avoid breaking run_model()."""
+        Since run_model() now splits kwargs, terminate arrives only in the RunOptions path
+        and must raise RuntimeError."""
         name = get_name("mul_1.onnx")
         rep = backend.prepare(name)
         x = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float32)
-        res = rep.run(x, terminate=True)
+        with self.assertRaises(RuntimeError) as ctx:
+            rep.run(x, terminate=True)
+        self.assertIn("not permitted", str(ctx.exception))
+
+    def test_run_model_with_safe_session_option(self):
+        """run_model() must accept safe SessionOptions kwargs and produce correct output."""
+        name = get_name("mul_1.onnx")
+        x = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float32)
+        res = backend.run_model(name, [x], graph_optimization_level=onnxrt.GraphOptimizationLevel.ORT_DISABLE_ALL)
         output_expected = np.array([[1.0, 4.0], [9.0, 16.0], [25.0, 36.0]], dtype=np.float32)
         np.testing.assert_allclose(res[0], output_expected, rtol=1e-05, atol=1e-08)
+
+    def test_run_model_with_safe_run_option(self):
+        """run_model() must accept safe RunOptions kwargs and produce correct output."""
+        name = get_name("mul_1.onnx")
+        x = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float32)
+        res = backend.run_model(name, [x], only_execute_path_to_fetches=True)
+        output_expected = np.array([[1.0, 4.0], [9.0, 16.0], [25.0, 36.0]], dtype=np.float32)
+        np.testing.assert_allclose(res[0], output_expected, rtol=1e-05, atol=1e-08)
+
+    def test_run_model_with_blocked_run_option_raises(self):
+        """run_model() must raise RuntimeError when a blocked RunOptions attr is passed.
+        With kwargs split, terminate arrives only in the RunOptions path and raises."""
+        name = get_name("mul_1.onnx")
+        x = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float32)
+        with self.assertRaises(RuntimeError):
+            backend.run_model(name, [x], terminate=True)
 
 
 if __name__ == "__main__":

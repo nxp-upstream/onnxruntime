@@ -13,7 +13,6 @@ from onnxruntime import RunOptions
 # Allowlist of RunOptions attributes that are safe to set via the backend API.
 # 'terminate' excluded: setting it True would deny the current inference call.
 # 'training_mode' excluded: silently switches inference behavior in training builds.
-# SessionOptions keys forwarded from run_model() are silently ignored here.
 _ALLOWED_RUN_OPTIONS = frozenset(
     {
         "log_severity_level",
@@ -46,8 +45,12 @@ class OnnxRuntimeBackendRep(BackendRep):
         for k, v in kwargs.items():
             if k in _ALLOWED_RUN_OPTIONS:
                 setattr(options, k, v)
-            # Unknown keys are silently ignored: run_model() forwards the same kwargs
-            # used for SessionOptions, so those keys will arrive here and must not raise.
+            elif hasattr(options, k):
+                raise RuntimeError(
+                    f"RunOptions attribute '{k}' is not permitted via the backend API. "
+                    f"Allowed attributes: {', '.join(sorted(_ALLOWED_RUN_OPTIONS))}"
+                )
+            # else: silently ignore unknown keys
 
         if isinstance(inputs, list):
             inps = {}

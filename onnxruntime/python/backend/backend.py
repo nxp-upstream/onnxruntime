@@ -15,7 +15,7 @@ from onnx.backend.base import Backend
 from onnx.checker import check_model
 
 from onnxruntime import InferenceSession, SessionOptions, get_available_providers, get_device
-from onnxruntime.backend.backend_rep import OnnxRuntimeBackendRep
+from onnxruntime.backend.backend_rep import OnnxRuntimeBackendRep, _ALLOWED_RUN_OPTIONS
 
 # Allowlist of SessionOptions attributes that are safe to set via the backend API.
 # Dangerous attributes (e.g. optimized_model_filepath, profile_file_prefix, enable_profiling)
@@ -181,12 +181,14 @@ class OnnxRuntimeBackend(Backend):
         :param device: requested device for the computation,
             None means the default one which depends on
             the compilation settings
-        :param kwargs: only a safe subset of :class:`onnxruntime.RunOptions` attributes are
-            accepted; see ``_ALLOWED_RUN_OPTIONS`` in ``backend_rep.py`` for the list
+        :param kwargs: accepted keys are the union of ``_ALLOWED_SESSION_OPTIONS``
+            (see ``backend.py``) and ``_ALLOWED_RUN_OPTIONS`` (see ``backend_rep.py``)
         :return: predictions
         """
-        rep = cls.prepare(model, device, **kwargs)
-        return rep.run(inputs, **kwargs)
+        session_kwargs = {k: v for k, v in kwargs.items() if k in _ALLOWED_SESSION_OPTIONS}
+        run_kwargs = {k: v for k, v in kwargs.items() if k in _ALLOWED_RUN_OPTIONS}
+        rep = cls.prepare(model, device, **session_kwargs)
+        return rep.run(inputs, **run_kwargs)
 
     @classmethod
     def run_node(cls, node, inputs, device=None, outputs_info=None, **kwargs):
