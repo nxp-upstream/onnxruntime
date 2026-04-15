@@ -64,5 +64,66 @@ class TestBackend(unittest.TestCase):
             assert_allclose(session_run_results[0], -(inp0 - inp1))
 
 
+class TestBackendKwargsAllowlist(unittest.TestCase):
+    """Tests that the SessionOptions/RunOptions kwargs allowlist correctly blocks dangerous
+    attributes and allows safe ones, preventing arbitrary file write via setattr()."""
+
+    def test_blocked_session_option_optimized_model_filepath_raises(self):
+        """optimized_model_filepath is a known SessionOptions attr but is not in the allowlist.
+        It must raise RuntimeError to prevent arbitrary file overwrites."""
+        name = get_name("mul_1.onnx")
+        with self.assertRaises(RuntimeError):
+            backend.prepare(name, optimized_model_filepath="/tmp/should_not_exist.bin")
+
+    def test_blocked_session_option_profile_file_prefix_raises(self):
+        """profile_file_prefix is a known SessionOptions attr but is not in the allowlist.
+        It must raise RuntimeError to prevent arbitrary file writes via profiling output."""
+        name = get_name("mul_1.onnx")
+        with self.assertRaises(RuntimeError):
+            backend.prepare(name, profile_file_prefix="/tmp/should_not_exist_profile")
+
+    def test_unknown_kwarg_is_silently_ignored(self):
+        """A kwarg that is not a SessionOptions attribute at all must be silently ignored.
+        This preserves backward compatibility for callers who pass extra kwargs."""
+        name = get_name("mul_1.onnx")
+        rep = backend.prepare(name, totally_unknown_kwarg="foo")
+        self.assertIsNotNone(rep)
+        x = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float32)
+        res = rep.run(x)
+        output_expected = np.array([[1.0, 4.0], [9.0, 16.0], [25.0, 36.0]], dtype=np.float32)
+        np.testing.assert_allclose(res[0], output_expected, rtol=1e-05, atol=1e-08)
+
+    def test_safe_session_option_graph_optimization_level_is_accepted(self):
+        """graph_optimization_level is in the allowlist and must be accepted without error."""
+        name = get_name("mul_1.onnx")
+        rep = backend.prepare(name, graph_optimization_level=onnxrt.GraphOptimizationLevel.ORT_DISABLE_ALL)
+        self.assertIsNotNone(rep)
+        x = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float32)
+        res = rep.run(x)
+        output_expected = np.array([[1.0, 4.0], [9.0, 16.0], [25.0, 36.0]], dtype=np.float32)
+        np.testing.assert_allclose(res[0], output_expected, rtol=1e-05, atol=1e-08)
+
+    def test_safe_session_option_intra_op_num_threads_is_accepted(self):
+        """intra_op_num_threads is in the allowlist and must be accepted without error."""
+        name = get_name("mul_1.onnx")
+        rep = backend.prepare(name, intra_op_num_threads=1)
+        self.assertIsNotNone(rep)
+        x = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float32)
+        res = rep.run(x)
+        output_expected = np.array([[1.0, 4.0], [9.0, 16.0], [25.0, 36.0]], dtype=np.float32)
+        np.testing.assert_allclose(res[0], output_expected, rtol=1e-05, atol=1e-08)
+
+    def test_blocked_run_option_terminate_is_silently_ignored(self):
+        """terminate is a known RunOptions attr but is not in _ALLOWED_RUN_OPTIONS.
+        run_model() forwards the same kwargs to both prepare() and rep.run(), so blocked
+        RunOptions attrs must be silently ignored — not raise — to avoid breaking run_model()."""
+        name = get_name("mul_1.onnx")
+        rep = backend.prepare(name)
+        x = np.array([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]], dtype=np.float32)
+        res = rep.run(x, terminate=True)
+        output_expected = np.array([[1.0, 4.0], [9.0, 16.0], [25.0, 36.0]], dtype=np.float32)
+        np.testing.assert_allclose(res[0], output_expected, rtol=1e-05, atol=1e-08)
+
+
 if __name__ == "__main__":
     unittest.main(module=__name__, buffer=True)
